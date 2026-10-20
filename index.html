@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcards Amarillas Pro</title>
+    <!-- Tailwind CSS para diseño moderno -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Lucide Icons para iconos intuitivos -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .perspective { perspective: 1000px; }
+        .card-inner {
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .flipped { transform: rotateY(180deg); }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+        }
+        .card-back { transform: rotateY(180deg); }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="bg-amber-400 shadow-md p-4 flex justify-between items-center text-amber-950">
+        <div class="flex items-center gap-2 font-bold text-xl">
+            <i data-lucide="layers" class="w-6 h-6"></i>
+            <span>YellowCards Cloud</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- Nube Status Indicator -->
+            <div id="cloudStatus" class="flex items-center gap-1.5 bg-amber-500/20 px-3 py-1.5 rounded-full text-sm font-medium">
+                <i data-lucide="cloud-off" id="cloudIcon" class="w-4 h-4"></i>
+                <span id="cloudText">Local (Sin sincronizar)</span>
+            </div>
+            <button id="btnConfigCloud" class="bg-amber-950 text-amber-500 hover:bg-amber-900 transition-colors p-2 rounded-lg" title="Configurar Nube">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Sidebar: Crear y Lista -->
+        <section class="md:col-span-1 flex flex-col gap-4">
+            <!-- Formulario de Creación -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                <h2 class="font-bold text-lg mb-3 flex items-center gap-2 text-gray-700">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-amber-500"></i> Nueva Tarjeta
+                </h2>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Frente (Pregunta)</label>
+                        <textarea id="txtFront" rows="2" class="w-full border border-gray-200 rounded-lg p-2 focus:ring-2 focus:ring-amber-400 focus:outline-none text-sm resize-none" placeholder="¿Qué es... ?"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Dorso (Respuesta)</label>
+                        <textarea id="txtBack" rows="2" class="w-full border border-gray-200 rounded-lg p-2 focus:ring-2 focus:ring-amber-400 focus:outline-none text-sm resize-none" placeholder="Es un concepto que..."></textarea>
+                    </div>
+                    <button id="btnAddCard" class="w-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-semibold p-2.5 rounded-lg shadow-sm transition-all flex justify-center items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i> Guardar Tarjeta
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista de Tarjetas Actuales -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-[250px]">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-bold text-lg flex items-center gap-2 text-gray-700">
+                        <i data-lucide="list" class="w-5 h-5 text-amber-500"></i> Mis Tarjetas (<span id="lblCount">0</span>)
+                    </h2>
+                    <button id="btnClearAll" class="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1" title="Borrar todo">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Limpiar
+                    </button>
+                </div>
+                <div id="cardList" class="overflow-y-auto flex-1 space-y-2 max-h-[350px] pr-1 scrollbar-thin">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Área de Estudio Principal -->
+        <section class="md:col-span-2 flex flex-col justify-between items-center gap-6 py-4">
+            
+            <!-- Vista de Tarjeta Vacía / Contenedor -->
+            <div id="studyContainer" class="w-full max-w-md flex-1 flex flex-col justify-center items-center">
+                
+                <!-- El Flashcard Físico -->
+                <div id="flashcard" class="perspective w-full h-72 cursor-pointer hidden">
+                    <div id="cardInner" class="card-inner w-full h-full relative shadow-lg rounded-2xl">
+                        
+                        <!-- Frente (Amarillo Intuitivo Post-it) -->
+                        <div class="card-front absolute inset-0 bg-gradient-to-br from-amber-100 to-amber-200 border-2 border-amber-300 rounded-2xl p-6 flex flex-col justify-between items-center text-center shadow-inner">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-amber-700 bg-amber-200/60 px-2 py-0.5 rounded">Frente</span>
+                            <p id="displayFront" class="text-xl md:text-2xl font-medium text-amber-950 my-auto whitespace-pre-wrap px-2"></p>
+                            <span class="text-xs text-amber-600 flex items-center gap-1"><i data-lucide="refresh-cw" class="w-3 h-3"></i> Haz clic para voltear</span>
+                        </div>
+                        
+                        <!-- Dorso (Amarillo un toque más intenso para contrastar) -->
+                        <div class="card-back absolute inset-0 bg-gradient-to-br from-amber-200 to-yellow-300 border-2 border-amber-400 rounded-2xl p-6 flex flex-col justify-between items-center text-center shadow-inner">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-amber-800 bg-amber-300/60 px-2 py-0.5 rounded">Dorso</span>
+                            <p id="displayBack" class="text-xl md:text-2xl font-medium text-amber-950 my-auto whitespace-pre-wrap px-2"></p>
+                            <span class="text-xs text-amber-700 flex items-center gap-1"><i data-lucide="refresh-cw" class="w-3 h-3"></i> Haz clic para voltear</span>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Estado Vacío -->
+                <div id="emptyState" class="text-center py-12 px-6 bg-white border border-dashed border-gray-200 rounded-2xl max-w-sm w-full shadow-sm">
+                    <i data-lucide="sparkles" class="w-12 h-12 text-amber-400 mx-auto mb-3 animate-pulse"></i>
+                    <h3 class="font-bold text-gray-700 mb-1">¡No hay tarjetas listas!</h3>
+                    <p class="text-sm text-gray-500">Agrega un par de términos en el formulario lateral para comenzar tu sesión de repaso.</p>
+                </div>
+
+            </div>
+
+            <!-- Controles Inferiores de Navegación -->
+            <div id="studyControls" class="w-full max-w-md flex justify-between items-center hidden bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                <button id="btnPrev" class="p-2.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors flex items-center gap-1 text-sm font-medium">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Anterior
+                </button>
+                <span id="lblProgress" class="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">0 / 0</span>
+                <button id="btnNext" class="p-2.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors flex items-center gap-1 text-sm font-medium">
+                    Siguiente <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Modal Configuración de Almacenamiento en la Nube (KVbin / JSONBin Gratuito y Libre) -->
+    <div id="cloudModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs hidden justify-center items-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-200">
+            <button id="btnCloseModal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                <i data-lucide="cloud-lightning" class="text-amber-500 w-6 h-6"></i> Nube Autohospedada
+            </h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Para guardar tus datos en la nube sin servidores complejos, este sistema usa **n_3_b_o** o un **JSONbin API** gratuito. Crea tu cuenta gratis en cualquier API de JSON binario o pega tu Endpoint personalizado abajo.
+            </p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">URL del Endpoint en la Nube (REST API)</label>
+                    <input type="url" id="cloudUrl" class="w-full border border-gray-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none" placeholder="https://jsonbin.org/tu-usuario/cards">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Token de Autorización (Si aplica)</label>
+                    <input type="password" id="cloudToken" class="w-full border border-gray-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none" placeholder="Bearer tu-token-secreto">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button id="btnSaveCloudSettings" class="flex-1 bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold py-2 rounded-lg transition-colors text-sm">
+                        Conectar y Guardar
+                    </button>
+                    <button id="btnDisconnectCloud" class="bg-gray-100 hover:bg-gray-200 text-red-600 font-medium px-3 py-2 rounded-lg transition-colors text-sm" title="Desconectar nube">
+                        Desconectar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de Lógica de la Aplicación -->
+    <script>
+        // Inicialización de Iconos Lucide
+        lucide.createIcons();
+
+        // Estado de la Aplicación
+        let cards = [];
+        let currentIndex = 0;
+        let cloudConfig = { url: '', token: '' };
+
+        // Elementos DOM
+        const txtFront = document.getElementById('txtFront');
+        const txtBack = document.getElementById('txtBack');
+        const btnAddCard = document.getElementById('btnAddCard');
+        const btnClearAll = document.getElementById('btnClearAll');
+        const cardList = document.getElementById('cardList');
+        const lblCount = document.getElementById('lblCount');
+        
+        const flashcard = document.getElementById('flashcard');
+        const cardInner = document.getElementById('cardInner');
+        const displayFront = document.getElementById('displayFront');
+        const displayBack = document.getElementById('displayBack');
+        const emptyState = document.getElementById('emptyState');
+        const studyControls = document.getElementById('studyControls');
+        const lblProgress = document.getElementById('lblProgress');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+
+        const cloudModal = document.getElementById('cloudModal');
+        const btnConfigCloud = document.getElementById('btnConfigCloud');
+        const btnCloseModal = document.getElementById('btnCloseModal');
+        const btnSaveCloudSettings = document.getElementById('btnSaveCloudSettings');
+        const btnDisconnectCloud = document.getElementById('btnDisconnectCloud');
+        const cloudUrl = document.getElementById('cloudUrl');
+        const cloudToken = document.getElementById('cloudToken');
+        
+        const cloudIcon = document.getElementById('cloudIcon');
+        const cloudText = document.getElementById('cloudText');
+        const cloudStatus = document.getElementById('cloudStatus');
+
+        // Cargar datos al iniciar
+        init();
+
+        function init() {
+            // LocalStorage base
+            const localCards = localStorage.getItem('yellow_cards');
+            if (localCards) cards = JSON.parse(localCards);
+
+            const localCloud = localStorage.getItem('yellow_cloud_config');
+            if (localCloud) {
+                cloudConfig = JSON.parse(localCloud);
+                cloudUrl.value = cloudConfig.url || '';
+                cloudToken.value = cloudConfig.token || '';
+            }
+
+            // Si está configurada la nube, jalar datos remotos
+            if (cloudConfig.url) {
+                pullFromCloud();
+            } else {
+                updateUI();
+            }
+        }
+
+        // Render general
+        function updateUI() {
+            lblCount.textContent = cards.length;
+            renderList();
+
+            if (cards.length > 0) {
+                emptyState.classList.add('hidden');
+                flashcard.classList.remove('hidden');
+                studyControls.classList.remove('hidden');
+                
+                // Forzar índice correcto si se borraron elementos
+                if (currentIndex >= cards.length) currentIndex = cards.length - 1;
+                if (currentIndex < 0) currentIndex = 0;
+
+                displayFront.textContent = cards[currentIndex].front;
+                displayBack.textContent = cards[currentIndex].back;
+                lblProgress.textContent = `${currentIndex + 1} / ${cards.length}`;
+                cardInner.classList.remove('flipped'); // Regresar al frente al cambiar de carta
+            } else {
+                emptyState.classList.remove('hidden');
+                flashcard.classList.add('hidden');
+                studyControls.classList.add('hidden');
+            }
+            
+            // Guardar localmente siempre
+            localStorage.setItem('yellow_cards', JSON.stringify(cards));
+            updateCloudStatusUI();
+        }
+
+        function renderList() {
+            cardList.innerHTML = '';
+            cards.forEach((card, index) => {
+                const item = document.createElement('div');
+                item.className = `p-2.5 rounded-lg border text-sm flex justify-between items-start transition-all cursor-pointer ${index === currentIndex ? 'bg-amber-50 border-amber-300 font-medium' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`;
+                
+                // Evento para saltar a esta tarjeta directamente al hacer clic en la lista
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('.btn-delete-single')) return; // No saltar si borra
+                    currentIndex = index;
+                    updateUI();
+                });
+
+                item.innerHTML = `
+                    <div class="truncate pr-2 flex-1">
+                        <span class="text-amber-800 font-bold block text-xs">#${index + 1}</span>
+                        <p class="truncate text-gray-700">${card.front}</p>
+                    </div>
+                    <button class="btn-delete-single text-gray-400 hover:text-red-500 p-1 rounded transition-colors" data-index="${index}">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                `;
+                cardList.appendChild(item);
+            });
+            lucide.createIcons();
+
+            // Asignar eventos de borrado individual
+            document.querySelectorAll('.btn-delete-single').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.getAttribute('data-index'));
+                    cards.splice(idx, 1);
+                    pushToCloud();
+                    updateUI();
+                });
+            });
+        }
+
+        function updateCloudStatusUI() {
+            if (cloudConfig.url) {
+                cloudStatus.className = "flex items-center gap-1.5 bg-emerald-100 px-3 py-1.5 rounded-full text-sm font-medium text-emerald-800";
+                cloudIcon.setAttribute('data-lucide', 'cloud-lightning');
+                cloudText.textContent = "Nube Conectada";
+            } else {
+                cloudStatus.className = "flex items-center gap-1.5 bg-amber-100 px-3 py-1.5 rounded-full text-sm font-medium text-amber-800";
+                cloudIcon.setAttribute('data-lucide', 'cloud-off');
+                cloudText.textContent = "Local";
+            }
+            lucide.createIcons();
+        }
+
+        // Interacciones y Eventos
+        btnAddCard.addEventListener('click', () => {
+            const front = txtFront.value.trim();
+            const back = txtBack.value.trim();
+
+            if (!front || !back) {
+                alert('Por favor, rellena el Frente y el Dorso de la tarjeta.');
+                return;
+            }
+
+            cards.push({ front, back });
+            txtFront.value = '';
+            txtBack.value = '';
+            txtFront.focus();
+
+            // Guardar e intentar subir
+            pushToCloud();
+            // Ir automáticamente a la última tarjeta agregada
+            currentIndex = cards.length - 1;
+            updateUI();
+        });
+
+        // Voltear tarjeta al hacer clic
+        flashcard.addEventListener('click', () => {
+            cardInner.classList.toggle('flipped');
+        });
+
+        // Navegación
+        btnPrev.addEventListener('click', () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                updateUI();
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (currentIndex < cards.length - 1) {
+                currentIndex++;
+                updateUI();
+            }
+        });
+
+        // Limpiar todo
+        btnClearAll.addEventListener('click', () => {
+            if (confirm('¿Estás seguro de que quieres eliminar TODAS tus tarjetas actuales?')) {
+                cards = [];
+                currentIndex = 0;
+                pushToCloud();
+                updateUI();
+            }
+        });
+
+        // Modal de Nube
+        btnConfigCloud.addEventListener('click', () => cloudModal.classList.replace('hidden', 'flex'));
+        btnCloseModal.addEventListener('click', () => cloudModal.classList.replace('flex', 'hidden'));
+
+        btnSaveCloudSettings.addEventListener('click', () => {
+            const url = cloudUrl.value.trim();
+            const token = cloudToken.value.trim();
+
+            if (!url) {
+                alert('Ingresa al menos una URL de API válida.');
+                return;
+            }
+
+            cloudConfig = { url, token };
+            localStorage.setItem('yellow_cloud_config', JSON.stringify(cloudConfig));
+            
+            // Probar sincronización inmediata
+            pushToCloud();
+            cloudModal.classList.replace('flex', 'hidden');
+        });
+
+        btnDisconnectCloud.addEventListener('click', () => {
+            if (confirm('¿Quieres desconectar la nube? Las tarjetas se mantendrán solo de forma local.')) {
+                cloudConfig = { url: '', token: '' };
+                localStorage.removeItem('yellow_cloud_config');
+                cloudUrl.value = '';
+                cloudToken.value = '';
+                updateUI();
+                cloudModal.classList.replace('flex', 'hidden');
+            }
+        });
+
+        // Conectividad con la API Nube (Métodos HTTP standard REST: GET/PUT)
+        async function pushToCloud() {
+            if (!cloudConfig.url) return;
+            
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (cloudConfig.token) headers['Authorization'] = cloudConfig.token;
+
+                // Enviamos el set completo de cartas para que reemplace el binario/JSON remoto
+                await fetch(cloudConfig.url, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify({ cards: cards, lastSavedIndex: currentIndex })
+                });
+                console.log('Sincronizado con éxito en la nube.');
+            } catch (err) {
+                console.error('Error enviando a la nube:', err);
+            }
+        }
+
+        async function pullFromCloud() {
+            if (!cloudConfig.url) return;
+
+            try {
+                const headers = {};
+                if (cloudConfig.token) headers['Authorization'] = cloudConfig.token;
+
+                const response = await fetch(cloudConfig.url, { headers });
+                if (response.ok) {
+                    const data = await response.json();
+                    // Ajustar según la estructura devuelta por proveedores como jsonbin
+                    const remoteData = data.record || data;
+                    if (remoteData && Array.isArray(remoteData.cards)) {
+                        cards = remoteData.cards;
+                        if (typeof remoteData.lastSavedIndex === 'number') {
+                            currentIndex = remoteData.lastSavedIndex;
+                        }
+                        updateUI();
+                    }
+                }
+            } catch (err) {
+                console.error('Error descargando de la nube:', err);
+                // Si falla el fetch por primera vez, igual pintamos lo local
+                updateUI();
+            }
+        }
+    </script>
+</body>
+</html>
